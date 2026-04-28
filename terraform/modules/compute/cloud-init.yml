@@ -54,13 +54,13 @@ write_files:
 
       [Service]
       Type=oneshot
-      ExecStart=/opt/port-deregister.sh
       RemainAfterExit=yes
-      TimeoutStartSec=30
-      KillMode=process
+      ExecStart=/bin/true
+      ExecStop=/opt/port-deregister.sh
+      TimeoutStopSec=30
 
       [Install]
-      WantedBy=halt.target reboot.target shutdown.target
+      WantedBy=multi-user.target
 
 runcmd:
   - systemctl enable port-deregister
