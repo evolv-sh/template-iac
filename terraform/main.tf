@@ -26,6 +26,12 @@ data "azurerm_key_vault_secret" "ssh" {
   key_vault_id = data.azurerm_key_vault.main.id
 }
 
+resource "azurerm_role_assignment" "vm_kv_reader" {
+  scope                = data.azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = module.compute.vm_pricipal_id
+}
+
 # Modules
 module "network" {
   source              = "./modules/network"
@@ -48,6 +54,7 @@ module "compute" {
   project_name          = var.project_name
   ssh_public_key        = data.azurerm_key_vault_secret.ssh.value
   network_interface_ids = module.network.vm_nic
+  key_vault_name        = var.key_vault_name
 
   depends_on = [module.network]
 }

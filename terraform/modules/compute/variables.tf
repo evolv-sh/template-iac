@@ -24,3 +24,6 @@ variable "ssh_public_key" {
   type = string
 }
 
+variable "key_vault_name" {
+  type = string
+}

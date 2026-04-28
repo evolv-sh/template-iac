@@ -1,0 +1,59 @@
+#cloud-config
+packages:
+  - jq
+  - curl
+
+runcmd:
+  - |
+    set -e
+
+    KEY_VAULT_NAME="${key_vault_name}"
+    API_URL="https://api.port.io/v1"
+    BLUEPRINT_ID="server"
+
+    # Managed identity wait to ready
+    sleep 20
+
+    # Token for Key Vault via managed identity
+    KV_TOKEN=$(curl -s \
+      "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net" \
+      -H "Metadata: true" | jq -r '.access_token')
+
+    # Credentials Port from Key Vault
+    CLIENT_ID=$(curl -s \
+      "https://$KEY_VAULT_NAME.vault.azure.net/secrets/port-client-id?api-version=7.0" \
+      -H "Authorization: Bearer $KV_TOKEN" | jq -r '.value')
+
+    CLIENT_SECRET=$(curl -s \
+      "https://$KEY_VAULT_NAME.vault.azure.net/secrets/port-client-secret?api-version=7.0" \
+      -H "Authorization: Bearer $KV_TOKEN" | jq -r '.value')
+
+    # Token Port
+    PORT_TOKEN=$(curl -s -X POST "$API_URL/auth/access_token" \
+      -H "Content-Type: application/json" \
+      -d "{\"clientId\": \"$CLIENT_ID\", \"clientSecret\": \"$CLIENT_SECRET\"}" \
+      | jq -r '.accessToken')
+
+    # Info VM
+    HOSTNAME=$(hostname)
+    PRIVATE_IP=$(hostname -I | awk '{print $1}')
+    PUBLIC_IP=$(curl -s https://api.ipify.org)
+    SERVER_ID="${project_name}-vm"
+
+    # Register to Port
+    curl -s -X POST "$API_URL/blueprints/$BLUEPRINT_ID/entities?upsert=true&merge=true" \
+      -H "Authorization: Bearer $PORT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"identifier\": \"$SERVER_ID\",
+        \"title\": \"$HOSTNAME\",
+        \"properties\": {
+          \"hostname\": \"$HOSTNAME\",
+          \"public_ip\": \"$PUBLIC_IP\",
+          \"private_ip\": \"$PRIVATE_IP\",
+          \"cloud_provider\": \"azure\",
+          \"region\": \"${location}\",
+          \"status\": \"running\"
+        },
+        \"relations\": {}
+      }"

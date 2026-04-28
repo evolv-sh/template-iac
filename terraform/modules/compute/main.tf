@@ -29,10 +29,11 @@ resource "azurerm_linux_virtual_machine" "main" {
     type = "SystemAssigned"
   }
 
-  # custom_data = base64encode(templatefile("${path.module}/cloud-init.yml", {
-  #   acr_name                       = var.acr_name
-  #   app_insights_connection_string = var.app_insights_connection_string
-  # }))
+  custom_data = base64encode(templatefile("${path.module}/cloud-init.yml", {
+    key_vault_name = var.key_vault_name
+    location       = var.location
+    project_name   = var.project_name
+  }))
 
   tags = {
     project_name = var.project_name
