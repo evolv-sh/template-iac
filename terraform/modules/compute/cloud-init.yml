@@ -3,7 +3,67 @@ packages:
   - jq
   - curl
 
+write_files:
+  - path: /opt/port-deregister.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      exec >> /var/log/port-deregister.log 2>&1
+      echo "[$(date)] Deregistering from Port..."
+
+      KEY_VAULT_NAME="${key_vault_name}"
+      API_URL="https://api.port.io/v1"
+      SERVER_ID="${project_name}-vm"
+
+      KV_TOKEN=$(curl -s \
+        "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net" \
+        -H "Metadata: true" | jq -r '.access_token')
+
+      CLIENT_ID=$(curl -s \
+        "https://$KEY_VAULT_NAME.vault.azure.net/secrets/port-client-id?api-version=7.0" \
+        -H "Authorization: Bearer $KV_TOKEN" | jq -r '.value')
+
+      CLIENT_SECRET=$(curl -s \
+        "https://$KEY_VAULT_NAME.vault.azure.net/secrets/port-client-secret?api-version=7.0" \
+        -H "Authorization: Bearer $KV_TOKEN" | jq -r '.value')
+
+      PORT_TOKEN=$(curl -s -X POST "$API_URL/auth/access_token" \
+        -H "Content-Type: application/json" \
+        -d "{\"clientId\": \"$CLIENT_ID\", \"clientSecret\": \"$CLIENT_SECRET\"}" \
+        | jq -r '.accessToken')
+
+      curl -s -X PATCH "$API_URL/blueprints/server/entities/$SERVER_ID" \
+        -H "Authorization: Bearer $PORT_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"properties\": {
+          \"status\": \"down\"
+        }
+      }"
+
+      echo "[$(date)] Status updated to down"
+
+  - path: /etc/systemd/system/port-deregister.service
+    content: |
+      [Unit]
+      Description=Deregister from Port catalog on shutdown
+      DefaultDependencies=no
+      Before=shutdown.target reboot.target halt.target
+      Requires=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/opt/port-deregister.sh
+      RemainAfterExit=yes
+      TimeoutStartSec=30
+      KillMode=process
+
+      [Install]
+      WantedBy=halt.target reboot.target shutdown.target
+
 runcmd:
+  - systemctl enable port-deregister
   - |
     exec >> /var/log/port-register.log 2>&1
 
