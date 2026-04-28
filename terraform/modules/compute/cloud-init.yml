@@ -5,11 +5,13 @@ packages:
 
 runcmd:
   - |
-    set -e
+    exec >> /var/log/port-register.log 2>&1
 
     KEY_VAULT_NAME="${key_vault_name}"
     API_URL="https://api.port.io/v1"
     BLUEPRINT_ID="server"
+
+    echo "[$(date)] Starting Port registration..."
 
     # Managed identity wait to ready
     sleep 20
@@ -28,11 +30,15 @@ runcmd:
       "https://$KEY_VAULT_NAME.vault.azure.net/secrets/port-client-secret?api-version=7.0" \
       -H "Authorization: Bearer $KV_TOKEN" | jq -r '.value')
 
+    echo "[$(date)] Port credentials retrieved successfully"
+
     # Token Port
     PORT_TOKEN=$(curl -s -X POST "$API_URL/auth/access_token" \
       -H "Content-Type: application/json" \
       -d "{\"clientId\": \"$CLIENT_ID\", \"clientSecret\": \"$CLIENT_SECRET\"}" \
       | jq -r '.accessToken')
+
+    echo "[$(date)] Port token acquired"
 
     # Info VM
     HOSTNAME=$(hostname)
